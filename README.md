@@ -140,14 +140,14 @@ Conecte o Agente de IA do N8N a um modelo como Gemini ou GPT para:
 
 ```
 📁 dio-lab-assistente-investimentos-rpa-n8n/
-├── 📄 README.md
-├── 📁 src/
-│   └── 📄 extrair_clientes.ipynb   # ✅ Notebook Python (já implementado, falta só o TODO)
-├── 📁 n8n/
-│   └── 📄 workflow.json            # 🎯 Seu desafio: exportar o workflow aqui
-└── 📁 docs/
-    ├── 📄 index.html               # ✅ Página de clientes (já implementado)
-    └── 📄 data.csv                 # ✅ Opções de investimento (já implementado)
+├── README.md
+├── rpa/
+│   └── extrair_clientes.ipynb
+├── n8n/
+│   └── workflow.json
+└── docs/
+    ├── index.html
+    └── data.csv
 ```
 
 ## Prompts Úteis para Copilotos de IA
