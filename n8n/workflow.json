@@ -1,0 +1,225 @@
+{
+  "name": "DIO Curso",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "Clientes",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "0de3b4c1-9cfa-4adf-ae54-9a138b472c50",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        -704,
+        0
+      ],
+      "webhookId": "f645fec1-ea0b-4a4b-97ec-7fcb3dc5746f"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst entrada = $input.first().json;\nconst body = entrada.body ?? entrada;\n\nlet clientes;\n\nif (Array.isArray(body.clientes)) {\n  clientes = body.clientes;\n} else if (body.nome && body.email) {\n  clientes = [body];\n} else {\n  throw new Error(\n    \"Não encontrei clientes nem um cliente individual na entrada.\"\n  );\n}\n\nreturn clientes.map(cliente => ({\n  json: cliente\n}));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -528,
+        -112
+      ],
+      "id": "015f0d01-7a0c-4380-8c95-ed35570d4268",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "\n{\n  \"sucesso\": true,\n  \"mensagem\": \"Clientes processados com sucesso\",\n  \"total\": 10\n}\n",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -384,
+        48
+      ],
+      "id": "00cecfec-7094-49be-9e3e-c56161a24117",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "url": "https://digitalinnovationone.github.io/dio-lab-assistente-investimentos-rpa-n8n/data.csv",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -208,
+        32
+      ],
+      "id": "85ed6824-62ef-40d1-aa26-3511b563b505",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst entrada = $input.first().json;\n\nconst csv =\n  typeof entrada.data === \"string\" ? entrada.data :\n  typeof entrada.body === \"string\" ? entrada.body :\n  typeof entrada === \"string\" ? entrada :\n  null;\n\nif (!csv) {\n  throw new Error(\n    \"CSV não encontrado como texto. Confira a saída do HTTP Request.\"\n  );\n}\n\nconst linhas = csv.trim().split(/\\r?\\n/);\n\nconst cabecalhos = linhas[0]\n  .replace(/^\\uFEFF/, \"\")\n  .split(\",\")\n  .map(c => c.trim());\n\nreturn linhas.slice(1)\n  .filter(linha => linha.trim() !== \"\")\n  .map(linha => {\n    const valores = linha.split(\",\");\n    const investimento = {};\n\n    cabecalhos.forEach((coluna, i) => {\n      investimento[coluna] = (valores[i] ?? \"\").trim();\n    });\n\n    return { json: investimento };\n  });\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        32
+      ],
+      "id": "1dcaee73-b895-4415-9d27-eef43cc5474c",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "perfil",
+              "field2": "perfil"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        80,
+        -80
+      ],
+      "id": "9f769893-247f-4465-88c1-5c7b51971718",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst itens = $input.all();\nconst grupos = new Map();\n\nfor (const item of itens) {\n  const d = item.json;\n\n  // Adapte estes nomes se os campos de saída do Merge\n  // estiverem diferentes.\n  const nome = d.nome ?? d.cliente?.nome;\n  const email = d.email ?? d.cliente?.email;\n  const perfil = d.perfil;\n  const produto = d.produto;\n  const minimo = Number(d.minimo);\n  \n  const saldoBruto = d.saldo ?? d.saldo_cliente ?? d.balance;\n  const saldo = typeof saldoBruto === \"number\"\n    ? saldoBruto\n    : Number(String(saldoBruto ?? \"\")\n        .replace(/[R$\\s]/g, \"\")\n        .replace(/\\./g, \"\")\n        .replace(\",\", \".\"));\n\n  if (!nome || !email || !perfil || !produto) continue;\n  if (!Number.isFinite(saldo) || !Number.isFinite(minimo)) continue;\n  if (saldo < minimo) continue;\n\n  if (!grupos.has(email)) {\n    grupos.set(email, {\n      nome,\n      email,\n      perfil,\n      saldo,\n      investimentos: []\n    });\n  }\n\n  grupos.get(email).investimentos.push({\n    produto,\n    minimo,\n    rentabilidade: d.rentabilidade\n  });\n}\n\nreturn [...grupos.values()].map(cliente => {\n  const opcoes = cliente.investimentos\n    .map(i => `${i.produto} (mínimo R$ ${i.minimo}; rentabilidade informada: ${i.rentabilidade})`)\n    .join(\"; \");\n\n  const mensagem =\n    `Olá, ${cliente.nome}! Com base no seu perfil ${cliente.perfil} ` +\n    `e no saldo informado de R$ ${cliente.saldo.toLocaleString(\"pt-BR\", {minimumFractionDigits: 2})}, ` +\n    `estas opções do nosso catálogo atendem ao valor mínimo: ${opcoes}. ` +\n    `Estas são opções para fins informativos; avalie os riscos e as condições antes de investir.`;\n\n  return {\n    json: {\n      ...cliente,\n      mensagem\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        80
+      ],
+      "id": "c67bfecf-259f-4160-a423-8e1bde64bad8",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        272,
+        -80
+      ],
+      "id": "6b2aca9d-d4ca-4428-9cda-b41f60789f68",
+      "name": "Respond to Webhook1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "b5897383-0f13-40f8-abf2-7fa5e3e0ec33",
+  "meta": {
+    "instanceId": "8578ba275d39b413129b6f82852aff82d295799440e1166166dd407f79ab768e"
+  },
+  "nodeGroups": [],
+  "id": "Y212heU3AA72kw51",
+  "tags": []
+}
